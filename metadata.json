@@ -1,5 +1,11 @@
 {
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "requestFramePermissions": [],
   "name": "Gemini Clone",
-  "description": "A sleek, responsive AI chat application powered by Google's Gemini 2.5 Flash model, featuring a modern dark interface, streaming responses, and Markdown support.",
-  "requestFramePermissions": []
+  "description": ""
 }

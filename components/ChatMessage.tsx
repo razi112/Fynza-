@@ -80,13 +80,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
              ) : (
                <div className={`markdown-body ${isStreaming ? 'typing-cursor' : ''}`}>
                  <ReactMarkdown
+                   urlTransform={(url) => url} // CRITICAL: Allow data: URLs for base64 images
                    components={{
                      code({node, inline, className, children, ...props}: any) {
                        const match = /language-(\w+)/.exec(className || '');
                        const isMultiLine = String(children).includes('\n');
                        
-                       // Apply syntax highlighting only for multi-line code blocks with a language or general code blocks
-                       // Inline code (like `var`) should use the simple style defined in CSS
                        return !inline && (match || isMultiLine) ? (
                          <div className="relative group/code my-4 rounded-lg overflow-hidden">
                            <SyntaxHighlighter
@@ -111,6 +110,18 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                            {children}
                          </code>
                        )
+                     },
+                     img({node, ...props}: any) {
+                        return (
+                          <div className="my-4">
+                            <img 
+                              {...props} 
+                              className="max-w-full h-auto rounded-xl border border-gray-700 shadow-md block"
+                              loading="lazy" 
+                              alt={props.alt || "Generated Image"}
+                            />
+                          </div>
+                        );
                      }
                    }}
                  >

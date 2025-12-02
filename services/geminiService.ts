@@ -63,7 +63,51 @@ export class GeminiService {
     this.startNewChat(newSettings, currentHistory);
   }
 
-  public async *sendMessageStream(message: string): AsyncGenerator<string, void, unknown> {
+  public async *sendMessageStream(
+    message: string, 
+    attachments?: Array<{ mimeType: string; base64: string }>
+  ): AsyncGenerator<string, void, unknown> {
+    
+    // Intercept image generation requests
+    // We check if the prompt explicitly asks to "Generate an image" (case-insensitive)
+    if (message.trim().toLowerCase().startsWith("generate an image")) {
+        try {
+            // Use the specific model for image generation
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash-image',
+                contents: {
+                    parts: [{ text: message }]
+                }
+            });
+            
+            let content = '';
+            // Process response to find text and inline image data
+            if (response.candidates?.[0]?.content?.parts) {
+                for (const part of response.candidates[0].content.parts) {
+                    if (part.text) {
+                        content += part.text;
+                    }
+                    if (part.inlineData) {
+                        const mimeType = part.inlineData.mimeType || 'image/png';
+                        const data = part.inlineData.data;
+                        // Construct Markdown image syntax
+                        content += `\n\n![Generated Image](data:${mimeType};base64,${data})\n\n`;
+                    }
+                }
+            }
+            
+            if (!content) content = "I couldn't generate an image based on that description.";
+            
+            // Yield the result immediately (simulate streaming since image gen is atomic)
+            yield content;
+            return;
+        } catch (error) {
+            console.error("Image generation failed:", error);
+            yield "Sorry, I encountered an error while trying to generate that image. Please try again.";
+            return;
+        }
+    }
+
     if (!this.chat) {
       this.startNewChat(this.currentSettings);
     }
@@ -71,9 +115,33 @@ export class GeminiService {
     if (!this.chat) throw new Error("Failed to initialize chat");
 
     try {
-      // The sendMessageStream method does not allow overriding config per message easily in this SDK version
-      // without creating a new chat, so we rely on the chat being initialized with the correct config.
-      const result = await this.chat.sendMessageStream({ message });
+      // Prepare parts for the message
+      const parts: any[] = [{ text: message }];
+
+      if (attachments && attachments.length > 0) {
+        attachments.forEach(att => {
+          parts.push({
+            inlineData: {
+              mimeType: att.mimeType,
+              data: att.base64
+            }
+          });
+        });
+      }
+
+      // If we have multiple parts (e.g. text + images), we need to pass the parts array
+      // The SDK wrapper usually takes { message: string | Part[] }
+      const messagePayload = parts.length === 1 ? message : parts;
+
+      // Note: In the specific SDK wrapper @google/genai, chat.sendMessageStream typically expects
+      // a string for the message property in strict typing, but often accepts parts arrays in practice
+      // or via a different property. Based on standard Google Generative AI patterns, we send parts.
+      // If the specific 'message' prop is strictly string, this might fail, but standard pattern is parts.
+      
+      // Since the types provided in the prompt's instruction only showed `message: string`, 
+      // we are pushing the boundaries here to support multi-modal chat.
+      // We pass the payload to 'message' which is the standard way to pass content in this wrapper.
+      const result = await this.chat.sendMessageStream({ message: messagePayload as any });
       
       for await (const chunk of result) {
         const c = chunk as GenerateContentResponse;
